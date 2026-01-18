@@ -36,8 +36,15 @@ jobs:
           git config --global user.name "Monitor Bot"
           git config --global user.email "bot@noreply.github.com"
           
-          # Pull the latest changes to prevent conflicts
+          # 1. Stash any local changes so we can pull safely
+          git stash
+          
+          # 2. Pull the latest code from the server (rebase to keep history clean)
           git pull --rebase origin main
           
-          # Now check and push
-          git diff --quiet || (git commit -a -m "Update state [skip ci]" && git push)
+          # 3. Apply the bot's changes back on top
+          git stash pop
+          
+          # 4. Push everything back to the server
+          git add last_commit.txt
+          git diff --quiet || (git commit -m "Update state [skip ci]" && git push)
