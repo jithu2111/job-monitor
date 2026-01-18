@@ -1,0 +1,39 @@
+name: Job Monitor
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # Runs every 30 minutes
+  workflow_dispatch:        # Allows manual run for testing
+
+permissions:
+  contents: write           # CRITICAL: Allows the bot to save the new commit ID
+
+jobs:
+  check-jobs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Libraries
+        run: pip install requests
+
+      - name: Run Monitor Script
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: python cloud_monitor.py
+
+      - name: Commit Changes
+        run: |
+          git config --global user.name "Monitor Bot"
+          git config --global user.email "bot@noreply.github.com"
+          
+          # Check if the text file changed. If yes, commit and push.
+          git diff --quiet || (git commit -a -m "Update state [skip ci]" && git push)
