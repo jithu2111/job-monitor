@@ -19,8 +19,19 @@ STATE_FILE = "last_commit.txt"
 
 
 def get_latest_commit():
+    # Get the token we just added to the YAML
+    token = os.environ.get("GH_TOKEN")
+    
+    # Create headers to authorize the request
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
     try:
-        response = requests.get(API_URL)
+        # Pass the 'headers' variable here
+        response = requests.get(API_URL, headers=headers)
+        
         if response.status_code == 200:
             return response.json()
         print(f"Error: {response.status_code}")
