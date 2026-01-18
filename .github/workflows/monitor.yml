@@ -36,10 +36,10 @@ jobs:
           git config --global user.name "Monitor Bot"
           git config --global user.email "bot@noreply.github.com"
           
-          # 1. Stash changes
+          # 1. Stash changes (Save local work)
           git stash
           
-          # 2. Pull latest updates (This fixes the error you saw!)
+          # 2. Pull latest updates (The Fix!)
           git pull --rebase origin main
           
           # 3. Apply changes back
