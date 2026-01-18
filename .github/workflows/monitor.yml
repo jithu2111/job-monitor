@@ -3,7 +3,7 @@ name: Job Monitor
 on:
   schedule:
     - cron: '*/5 * * * *'  # Runs every 5 minutes
-  workflow_dispatch:        # Allows manual run
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -36,13 +36,13 @@ jobs:
           git config --global user.name "Monitor Bot"
           git config --global user.email "bot@noreply.github.com"
           
-          # 1. Stash the 'last_commit.txt' change so it doesn't get lost
+          # 1. Stash changes
           git stash
           
-          # 2. Pull the latest updates from the server
+          # 2. Pull latest updates (This fixes the error you saw!)
           git pull --rebase origin main
           
-          # 3. Bring the 'last_commit.txt' change back
+          # 3. Apply changes back
           git stash pop
           
           # 4. Save and Push
