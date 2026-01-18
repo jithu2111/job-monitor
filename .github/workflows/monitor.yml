@@ -28,7 +28,7 @@ jobs:
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # <--- CRITICAL LINE
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python cloud_monitor.py
 
       - name: Commit Changes
@@ -36,15 +36,15 @@ jobs:
           git config --global user.name "Monitor Bot"
           git config --global user.email "bot@noreply.github.com"
           
-          # 1. Stash any local changes so we can pull safely
+          # 1. Stash the 'last_commit.txt' change so it doesn't get lost
           git stash
           
-          # 2. Pull the latest code from the server (rebase to keep history clean)
+          # 2. Pull the latest updates from the server
           git pull --rebase origin main
           
-          # 3. Apply the bot's changes back on top
+          # 3. Bring the 'last_commit.txt' change back
           git stash pop
           
-          # 4. Push everything back to the server
+          # 4. Save and Push
           git add last_commit.txt
           git diff --quiet || (git commit -m "Update state [skip ci]" && git push)
