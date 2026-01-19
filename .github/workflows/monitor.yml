@@ -39,8 +39,9 @@ jobs:
           # 1. Sync first
           git pull --rebase --autostash origin main
           
-          # 2. Add BOTH state files (using the wildcard *)
+          # 2. Add ALL state files
           git add state_*.txt
           
-          # 3. Save
-          git diff --quiet || (git commit -m "Update state [skip ci]" && git push)
+          # 3. Save (The Fix: Added --staged)
+          # This checks if there are files ready to be committed.
+          git diff --staged --quiet || (git commit -m "Update state [skip ci]" && git push)
