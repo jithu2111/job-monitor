@@ -11,15 +11,15 @@ TARGETS = [
         "owner": "speedyapply",
         "repo": "2026-SWE-College-Jobs",
         "branch": "main",
-        "path": "README.md",          # STRICTLY monitor Readme
+        "path": "README.md",
         "state_file": "state_speedy.txt"
     },
     {
         "name": "SimplifyJobs (Summer 2026)",
         "owner": "SimplifyJobs",
         "repo": "Summer2026-Internships",
-        "branch": "dev",              # They usually update 'dev' first
-        "path": "README.md",          # STRICTLY monitor Readme
+        "branch": "dev",
+        "path": "README.md",
         "state_file": "state_simplify.txt"
     }
 ]
@@ -30,54 +30,80 @@ APP_PASSWORD = os.environ.get("EMAIL_PASS")
 SEND_TO = os.environ.get("EMAIL_USER")
 GH_TOKEN = os.environ.get("GH_TOKEN")
 
+def get_headers():
+    return {
+        "Authorization": f"token {GH_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
 def get_latest_commit(target):
-    """Fetches the latest commit for a SPECIFIC FILE."""
+    """Fetches the latest commit summary."""
     owner = target["owner"]
     repo = target["repo"]
     branch = target["branch"]
     path = target["path"]
     
-    headers = {
-        "Authorization": f"token {GH_TOKEN}",
-        "Accept": "application/vnd.github.v3+json"
-    }
-    
-    # We use the 'commits' endpoint with a 'path' filter
     url = f"https://api.github.com/repos/{owner}/{repo}/commits"
     params = {"sha": branch, "path": path, "per_page": 1}
     
     try:
-        response = requests.get(url, headers=headers, params=params)
+        response = requests.get(url, headers=get_headers(), params=params)
         if response.status_code == 200:
             commits = response.json()
             if commits:
-                return commits[0] # Return the latest commit object
+                return commits[0]
             return None
-        
         print(f"Error fetching {target['name']}: {response.status_code}")
         return None
     except Exception as e:
         print(f"Network error on {target['name']}: {e}")
         return None
 
-def send_email(target, commit_data):
+def get_commit_diff(target, sha):
+    """Fetches the specific code changes (patch) for the file."""
+    owner = target["owner"]
+    repo = target["repo"]
+    path = target["path"]
+    
+    # We need the specific commit details to get the 'patch' text
+    url = f"https://api.github.com/repos/{owner}/{repo}/commits/{sha}"
+    
+    try:
+        response = requests.get(url, headers=get_headers())
+        if response.status_code == 200:
+            data = response.json()
+            # Loop through files to find the one we are watching (README.md)
+            for file in data.get('files', []):
+                if file['filename'] == path:
+                    return file.get('patch', "No text changes found (binary file or rename?)")
+            return "File modified, but specific diff not found in commit."
+        else:
+            return f"Could not fetch diff. Status: {response.status_code}"
+    except Exception as e:
+        return f"Error fetching diff: {str(e)}"
+
+def send_email(target, commit_data, diff_text):
     msg = EmailMessage()
-    msg['Subject'] = f"🚨 NEW JOBS: {target['name']}"
+    msg['Subject'] = f"🚨 JOBS CHANGED: {target['name']}"
     msg['From'] = EMAIL_ADDRESS
     msg['To'] = SEND_TO
 
     sha = commit_data['sha']
     message = commit_data['commit']['message']
     author = commit_data['commit']['author']['name']
-    
-    # Direct link to the file so you can see the diff immediately
     link = f"https://github.com/{target['owner']}/{target['repo']}/blob/{target['branch']}/{target['path']}"
 
+    # We truncate the diff if it's too huge (to prevent email errors)
+    if len(diff_text) > 3000:
+        diff_text = diff_text[:3000] + "\n...[Diff truncated, click link to see more]..."
+
     body = (
-        f"The README has changed in {target['name']}!\n\n"
-        f"Commit: {message}\n"
+        f"The README has been updated!\n\n"
+        f"Commit Msg: {message}\n"
         f"Author: {author}\n"
-        f"Check the list here: {link}"
+        f"Link: {link}\n\n"
+        f"--- CHANGES BELOW ---\n\n"
+        f"{diff_text}"
     )
     msg.set_content(body)
 
@@ -90,7 +116,7 @@ def send_email(target, commit_data):
         print(f"❌ Email failed: {e}")
 
 def main():
-    print("--- Multi-Repo Readme Check Started ---")
+    print("--- Multi-Repo Deep Monitor Started ---")
     
     changes_detected = False
 
@@ -112,8 +138,12 @@ def main():
         
         # 3. Compare
         if last_sha != current_sha:
-            print(f"--> Update found! {last_sha[:7]} -> {current_sha[:7]}")
-            send_email(target, current_data)
+            print(f"--> Update found! Fetching diff...")
+            
+            # 4. FETCH THE DIFF (New Step)
+            diff_text = get_commit_diff(target, current_sha)
+            
+            send_email(target, current_data, diff_text)
             
             # Update state file
             with open(target['state_file'], 'w') as f:
