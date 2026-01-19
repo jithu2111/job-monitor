@@ -36,8 +36,11 @@ jobs:
           git config --global user.name "Monitor Bot"
           git config --global user.email "bot@noreply.github.com"
           
-          # FORCE SYNC: This fixes the error
+          # 1. Sync first
           git pull --rebase --autostash origin main
           
-          git add last_commit.txt
+          # 2. Add BOTH state files (using the wildcard *)
+          git add state_*.txt
+          
+          # 3. Save
           git diff --quiet || (git commit -m "Update state [skip ci]" && git push)
