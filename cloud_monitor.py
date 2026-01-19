@@ -5,87 +5,125 @@ import sys
 from email.message import EmailMessage
 
 # --- CONFIGURATION ---
-REPO_OWNER = "speedyapply"
-REPO_NAME = "2026-SWE-College-Jobs"
-BRANCH = "main"
-API_URL = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/commits/{BRANCH}"
+TARGETS = [
+    {
+        "name": "SpeedyApply (2026 Jobs)",
+        "owner": "speedyapply",
+        "repo": "2026-SWE-College-Jobs",
+        "branch": "main",
+        "path": "README.md",          # STRICTLY monitor Readme
+        "state_file": "state_speedy.txt"
+    },
+    {
+        "name": "SimplifyJobs (Summer 2026)",
+        "owner": "SimplifyJobs",
+        "repo": "Summer2026-Internships",
+        "branch": "dev",              # They usually update 'dev' first
+        "path": "README.md",          # STRICTLY monitor Readme
+        "state_file": "state_simplify.txt"
+    }
+]
 
 # SECRETS
 EMAIL_ADDRESS = os.environ.get("EMAIL_USER")
 APP_PASSWORD = os.environ.get("EMAIL_PASS")
 SEND_TO = os.environ.get("EMAIL_USER")
-# GRAB THE TOKEN
-GH_TOKEN = os.environ.get("GH_TOKEN") 
+GH_TOKEN = os.environ.get("GH_TOKEN")
 
-STATE_FILE = "last_commit.txt"
-
-def get_latest_commit():
-    # If we don't have a token, the script will likely fail with 403
-    if not GH_TOKEN:
-        print("⚠️ Warning: No GH_TOKEN found. Request might be blocked.")
-        headers = {}
-    else:
-        headers = {
-            "Authorization": f"token {GH_TOKEN}",
-            "Accept": "application/vnd.github.v3+json"
-        }
-
+def get_latest_commit(target):
+    """Fetches the latest commit for a SPECIFIC FILE."""
+    owner = target["owner"]
+    repo = target["repo"]
+    branch = target["branch"]
+    path = target["path"]
+    
+    headers = {
+        "Authorization": f"token {GH_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    # We use the 'commits' endpoint with a 'path' filter
+    url = f"https://api.github.com/repos/{owner}/{repo}/commits"
+    params = {"sha": branch, "path": path, "per_page": 1}
+    
     try:
-        response = requests.get(API_URL, headers=headers)
+        response = requests.get(url, headers=headers, params=params)
         if response.status_code == 200:
-            return response.json()
-        print(f"Error: {response.status_code} - {response.text}") # Print detail if it fails
+            commits = response.json()
+            if commits:
+                return commits[0] # Return the latest commit object
+            return None
+        
+        print(f"Error fetching {target['name']}: {response.status_code}")
         return None
     except Exception as e:
-        print(f"Network error: {e}")
+        print(f"Network error on {target['name']}: {e}")
         return None
 
-def send_email(commit_data):
+def send_email(target, commit_data):
     msg = EmailMessage()
-    msg['Subject'] = f"🚨 JOB REPO UPDATE!"
+    msg['Subject'] = f"🚨 NEW JOBS: {target['name']}"
     msg['From'] = EMAIL_ADDRESS
     msg['To'] = SEND_TO
 
     sha = commit_data['sha']
     message = commit_data['commit']['message']
-    link = f"https://github.com/{REPO_OWNER}/{REPO_NAME}"
+    author = commit_data['commit']['author']['name']
+    
+    # Direct link to the file so you can see the diff immediately
+    link = f"https://github.com/{target['owner']}/{target['repo']}/blob/{target['branch']}/{target['path']}"
 
-    body = f"New Update!\n\nCommit: {message}\nSHA: {sha}\n\nLink: {link}"
+    body = (
+        f"The README has changed in {target['name']}!\n\n"
+        f"Commit: {message}\n"
+        f"Author: {author}\n"
+        f"Check the list here: {link}"
+    )
     msg.set_content(body)
 
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
             smtp.login(EMAIL_ADDRESS, APP_PASSWORD)
             smtp.send_message(msg)
-        print("✅ Email sent.")
+        print(f"✅ Email sent for {target['name']}.")
     except Exception as e:
         print(f"❌ Email failed: {e}")
 
 def main():
-    print("--- Cloud Check Started ---")
+    print("--- Multi-Repo Readme Check Started ---")
     
-    # 1. Read the previous commit
-    last_sha = ""
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, 'r') as f:
-            last_sha = f.read().strip()
+    changes_detected = False
 
-    # 2. Get current commit
-    current_data = get_latest_commit()
-    if not current_data:
-        sys.exit(1) # Stop here if 403 happens
+    for target in TARGETS:
+        print(f"Checking {target['name']}...")
         
-    current_sha = current_data['sha']
-    
-    # 3. Compare
-    if last_sha != current_sha:
-        print(f"Update detected! {last_sha} -> {current_sha}")
-        send_email(current_data)
+        # 1. Read last state
+        last_sha = ""
+        if os.path.exists(target['state_file']):
+            with open(target['state_file'], 'r') as f:
+                last_sha = f.read().strip()
+
+        # 2. Fetch current state
+        current_data = get_latest_commit(target)
+        if not current_data:
+            continue
+            
+        current_sha = current_data['sha']
         
-        with open(STATE_FILE, 'w') as f:
-            f.write(current_sha)
-    else:
-        print("No changes detected.")
+        # 3. Compare
+        if last_sha != current_sha:
+            print(f"--> Update found! {last_sha[:7]} -> {current_sha[:7]}")
+            send_email(target, current_data)
+            
+            # Update state file
+            with open(target['state_file'], 'w') as f:
+                f.write(current_sha)
+            changes_detected = True
+        else:
+            print("--> No changes.")
+            
+    if not changes_detected:
+        print("No changes in any targets.")
 
 if __name__ == "__main__":
     main()
