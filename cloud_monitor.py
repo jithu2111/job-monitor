@@ -43,14 +43,15 @@ TARGETS = [
     {
         "type": "api",
         "name": "Levels.fyi Internships",
-        # I extracted this from your previous screenshot. It searches: US, Internship, Posted last 1 day.
-        "url": "https://api.levels.fyi/v1/job/search?limitPerCompany=3&limit=50&offset=0&sortBy=relevance&postedAfterTimeType=days&postedAfterValue=1&locationSlugs%5B%5D=united-states&jobLevels%5B%5D=internship",
+        # FIXED URL: Changed limit=50 to limit=25
+        "url": "https://api.levels.fyi/v1/job/search?limitPerCompany=3&limit=25&offset=0&sortBy=relevance&postedAfterTimeType=days&postedAfterValue=1&locationSlugs%5B%5D=united-states&jobLevels%5B%5D=internship",
         "headers": {
-            # ACTION REQUIRED: Paste the 'Authorization' value from your 'job-alert' screenshot here!
-            # It must start with "Bearer eyJ..."
+            # PASTE YOUR TOKEN HERE
             "Authorization": "Bearer eyJraWQiOiJJaFplZEtLU3hDVkFDSmJaMTkra1wvQVJNWm5yVHZiMDZlYTZTMGFOeXo4UT0iLCJhbGciOiJSUzI1NiJ9.eyJhdF9oYXNoIjoiOWIwU2lKWEZGYU9XVHhqa1hidGVEUSIsInN1YiI6IjE3MzkzMWYxLTlhMmEtNDIzMS04MTY1LTE5Y2Y0OTNhMzg0OCIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczpcL1wvY29nbml0by1pZHAudXMtd2VzdC0yLmFtYXpvbmF3cy5jb21cL3VzLXdlc3QtMl9mVWNmelNHZHYiLCJjb2duaXRvOnVzZXJuYW1lIjoiMTczOTMxZjEtOWEyYS00MjMxLTgxNjUtMTljZjQ5M2EzODQ4Iiwibm9uY2UiOiItM2JUWXpFQUxIeFFEX3BDQXhLNlFrZ1RJX2Z0RW9VdHdMZ0dLdmh3NG9zRWtJNTFUc2F2dy1meWlnNTNjXzhtUXk0bHNWZWhzam14RGF5ektxV2dadFM3MDI3Z1JkNXlheUtIVmpxbGhWdGhxMVlIZE1heVFac1RVSjVZY0NkSjMwT0hCOHl1b05uZGRjbW1wOXVzYVZsa1dqdHlOaE96N0JGYXpwNkc3Zk0iLCJhdWQiOiI3Nm9mMGljaDE4aGQ4dWVoanU3Zm5pdjJ1MSIsImlkZW50aXRpZXMiOlt7InVzZXJJZCI6IjExMTU5NzgwMTA5ODU5ODY0MzMwMCIsInByb3ZpZGVyTmFtZSI6Ikdvb2dsZSIsInByb3ZpZGVyVHlwZSI6Ikdvb2dsZSIsImlzc3VlciI6bnVsbCwicHJpbWFyeSI6ImZhbHNlIiwiZGF0ZUNyZWF0ZWQiOiIxNzU2Nzc3MTY3MTcyIn1dLCJ0b2tlbl91c2UiOiJpZCIsImF1dGhfdGltZSI6MTc2ODg3MTUyMiwiZXhwIjoxNzY4OTU3OTIyLCJpYXQiOjE3Njg4NzE1MjIsImVtYWlsIjoicHJhamVldGguY2hhbm5hQGdtYWlsLmNvbSJ9.d3Y3IWe_q2JfQ-zZNavw0R2Cl5QNWAozQUqOF2M90tReHRCV3pPaYFFxUDfZE8Kcrx8jM6rE6tZb8QiolwhlRHxpLbAvpWqfaEe02p0AnEQtMT1U6ZI84zfNc8rKarVH7w4SKTG4zFI0fsBGNhRFmCWyEMFW61EOO-nnQC1OPPJXMIAtuy16ekMtAF1Ef0rec_LOXDb-jCOqGgtncMonVZq4ea2eQjYGNj9Rg6MkyCcCXAC1WpERNAsnG3GveW5QP5GZotrdseJ7eKyOG2mDtrlPV0hBpWO_oEQqN9LyPVn6ZJB3qU1AquwV_jmwcaNoSgYzFZIGgf7us1OppoDNTQ",
             
-            "User-Agent": "Mozilla/5.0",
+            # THE FIX: Full User-Agent to prevent 402 Payment error
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+            
             "Origin": "https://www.levels.fyi",
             "Referer": "https://www.levels.fyi/"
         },
@@ -65,7 +66,6 @@ SEND_TO = os.environ.get("EMAIL_USER")
 GH_TOKEN = os.environ.get("GH_TOKEN")
 
 def get_github_diff(target, commit_sha):
-    """Fetches the specific lines that changed in a commit."""
     url = f"https://api.github.com/repos/{target['owner']}/{target['repo']}/commits/{commit_sha}"
     headers = {"Authorization": f"token {GH_TOKEN}"}
     try:
@@ -111,16 +111,20 @@ def get_github_update(target):
     return None
 
 def get_api_update(target):
-    """Fetches private API and hashes the result."""
     try:
-        # Standard GET request for both JobRight and Levels
         r = requests.get(target['url'], headers=target['headers'])
+        
+        # Log specific errors for debugging
+        if r.status_code == 402:
+            print(f"⚠️ {target['name']} Blocked! (402 Payment Required) - Check User-Agent.")
+            return None
+        if r.status_code == 400:
+            print(f"⚠️ {target['name']} Bad Request! (400) - Check Params (limit=25).")
+            return None
 
         if r.status_code == 200:
-            # Hash the response to detect changes
             data_hash = hashlib.md5(r.text.encode('utf-8')).hexdigest()
             
-            # Determine which link to send in the email
             if "Levels" in target['name']:
                 web_link = "https://www.levels.fyi/jobs/location/united-states/level/internship"
             else:
@@ -158,7 +162,7 @@ def send_email(target, data, diff_details=""):
         pass
 
 def main():
-    print("--- Universal Cloud Monitor v4 ---")
+    print("--- Universal Cloud Monitor v6 (Fixes applied) ---")
     changes = False
 
     for target in TARGETS:
